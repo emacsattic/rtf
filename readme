@@ -6,10 +6,9 @@ development. DO NOT USE IT!
 
 				 ***
 
-If you are curious, you have to byte compile and load the files
-rtf.el, rtf-par.el, rtf-reader.el and rtf-controls.el manually.  Byte
-compilation is strongly recommended.  If ‘load-path’ is set correctly,
-it is sufficient to ‘(require 'rtf)’.
+If you are curious, the makefile is crappy, but it works. You need to
+ajust your ‘load-path’ after that and ‘(require 'rtf)’. Byte
+compilation is *strongly* recommended.
 
 At compile time you also need the library state-m.el in the “lib”
 directory. (It is written by me, but it is in “lib”, because it is a

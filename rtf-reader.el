@@ -51,9 +51,9 @@
 ;; text accordingly into a buffer.  I refer to this whole program
 ;; reading and interpreting RTF as "the parser" or--explicitly
 ;; mentioning "RTF"--as "the RTF reader" (this is the term used in the
-;; RTF specification)
+;; RTF specification).
 
-;; The specification for Rich Text Format is by far to large and
+;; The specification for Rich Text Format is by far too large and
 ;; complicated to be repeated here.  A few cursory notes are added
 ;; throughout the code, wherever appropriate.  You can obtain the full
 ;; spec from here: 
@@ -140,7 +140,7 @@
   default-font     ; deff
   )
 
-(defstruct rtf-env-stylesheet
+(defstruct rtf-stylesheet
   "A style sheet.
 A style sheet is part of the data gained by parsing the
 \\stylesheet destination group."
@@ -153,8 +153,9 @@ A style sheet is part of the data gained by parsing the
   autoupd          ; sautoupd
   keycode          ; keycode
   hidden           ; shidden
-  charfmt          ; <formatting>
-  parfmt)
+  formatting
+  )
+ 
 
 (defstruct rtf-env-font
   "Font table.
@@ -205,6 +206,7 @@ A font table is part of the data gained by parsing the
   space-before      ; sb
   space-after       ; sa
   line-spacing      ; sl
+  charfmt
   ;; slmult
   ;; subdocument
   ;; rtlpar
@@ -219,7 +221,8 @@ A font table is part of the data gained by parsing the
 
 (defstruct rtf-character-props ;; (:type vector))
   "Character formatting properties."
-  face        ; cs
+  style       ; cs
+  face
   bold        ; b
   italic      ; i
   underlined  ; ul
@@ -336,16 +339,21 @@ A font table is part of the data gained by parsing the
        ((?a . ?z) t t read-control-word)
        ((?- (?0 . ?9)) (lambda (o i) (setq control (intern o)) i)
 	               t read-argument)
-       ((?\  ?\t ?\n) (lambda (o i) (intern o)) t skip-whitespace-after-control)
+       ((?\  ?\t ?\n) (lambda (o i) (intern o))
+	t exit)
        (t (lambda (o i) (intern o)) nil exit))
 
-      (skip-whitespace-after-control
-       ((?\  ?\t ?\n) nil t skip-whitespace-after-control)
-       (t nil nil exit))
+;;       (skip-whitespace-after-control
+;;        ((?\  ?\t ?\n) nil t skip-whitespace-after-control)
+;;        (t nil nil exit))
 
       (read-argument ((?0 . ?9) t t read-argument)
-		     (?\  (lambda (o i) (vector control (string-to-number o))) t exit)
-		     (t (lambda (o i) (vector control (string-to-number o))) nil exit)))))
+		     (?\  (lambda (o i)
+			    (vector control (string-to-number o))
+			    ) t exit)
+		     (t (lambda (o i)
+			  (vector control (string-to-number o))
+			  ) nil exit)))))
 
 (defun rtf-read ()
   "Read RTF expression at point."

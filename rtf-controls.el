@@ -361,19 +361,19 @@ the fonttbl destination group.")
     (let ((document (rtf-environment-document environment))
 	  secstyles parstyles charstyles)
       (dolist (sty stylesheets)
-	(case (rtf-env-stylesheet-type sty)
+	(case (rtf-stylesheet-type sty)
 	  (ds (push sty secstyles))
 	  (s (push sty parstyles))
 	  (cs (push sty charstyles))))
       (setf (rtf-env-document-sec-stylesheets document)
 	    (rtf-sort-and-vectorize secstyles
-				    'rtf-env-stylesheet-num))
+				    'rtf-stylesheet-num))
       (setf (rtf-env-document-par-stylesheets document)
 	    (rtf-sort-and-vectorize parstyles
-				    'rtf-env-stylesheet-num))
+				    'rtf-stylesheet-num))
       (setf (rtf-env-document-char-stylesheets document)
 	    (rtf-sort-and-vectorize charstyles
-				    'rtf-env-stylesheet-num)))))
+				    'rtf-stylesheet-num)))))
 
 (defconst rtf-style-parfmt-keywords
   '((ql . (justification . left))
@@ -392,7 +392,7 @@ the fonttbl destination group.")
 		   (assq 's alist)
 		   (assq 'cs alist)
 		   (cons 's 0))))
-    (make-rtf-env-stylesheet
+    (make-rtf-stylesheet
      :type (car type)
      :num (cdr type)
      :basedon (cdr (assq 'sbasedon alist))
@@ -401,11 +401,13 @@ the fonttbl destination group.")
      :next (cdr (assq 'snext alist))
      :autoupd (cdr (assq 'sautoupd alist))
      :keycode (cdr (assq 'keycode alist))
-     :charfmt (rtf-style-make-chrfmt alist type (car info))
-     :parfmt (rtf-style-make-parfmt alist)
+     ;; FIXME:
+     :formatting  (if (assq 'cs alist)
+		      (rtf-style-make-chrfmt alist type (car info))
+		    (rtf-style-make-parfmt alist type (car info)))
      :hidden (cdr (assq 'shidden alist)))))
 
-(defun rtf-style-make-parfmt (alist)
+(defun rtf-style-make-parfmt (alist type name)
   (make-rtf-paragraph
    :style t
 ;;   :in-table (cdr (assq 'intbl alist))
@@ -413,20 +415,23 @@ the fonttbl destination group.")
    :left-indent (cdr (assq 'li alist))
    :right-indent (cdr (assq 'ri alist))
    :space-before (cdr (assq 'sb alist))
-   :space-after (cdr (assq 'sa alist))))
+   :space-after (cdr (assq 'sa alist))
+   :charfmt (rtf-style-make-chrfmt alist type name)))
 
 (defun rtf-style-make-chrfmt (alist type name)
   (make-rtf-character-props
-   :face (make-face (make-symbol (format "rtf-%s-%d-%s"
-					   (car type) (cdr type)
-					   (if (stringp name)
-					       (mapconcat 'identity
-							  (split-string
-							   (rtf-remove-trailing-semicolon
-							    name)
-							   " ")
-							  "-")
-					     "unnamed"))))
+   :style t
+   :face (make-face (make-symbol
+		     (format "rtf-%s-%d-%s"
+			     (car type) (cdr type)
+			     (if (stringp name)
+				 (mapconcat 'identity
+					    (split-string
+					     (rtf-remove-trailing-semicolon
+					      name)
+					     " ")
+					    "-")
+			       "unnamed"))))
    :bold (cdr (assq 'b alist))
    :italic (cdr (assq 'i alist))
    :underlined (cdr (assq 'i alist))
@@ -613,13 +618,7 @@ the fonttbl destination group.")
   (setf (rtf-environment-charfmt environment)
 	(copy-rtf-character-props
 	 (rtf-environment-charfmt environment)))
-  (setf (rtf-character-props-face
-	 (rtf-environment-charfmt environment))
-	(aref
-	 (rtf-character-props-face
-	  (rtf-env-stylesheet-charfmt
-	   (rtf-env-document-char-stylesheets
-	    (rtf-environment-document environment))))
+  (setf (rtf-character-props-style
 	 argument)))
 
 ;; TODO: ccs and fcharset
@@ -683,10 +682,10 @@ the fonttbl destination group.")
   (make-rtf-document
 ;;    :font-table (rtf-document-setup-font-table
 ;; 		(rtf-env-document-font-table doc))
-   :char-styles (rtf-document-setup-char-styles
-		 (rtf-env-document-char-stylesheets doc))
-;;    :par-styles (rtf-document-setup-par-styles
-;; 		(rtf-env-document-par-stylesheets doc))
+   :char-styles (rtf-document-setup-styles
+ 		 (rtf-env-document-char-stylesheets doc))
+   :par-styles (rtf-document-setup-styles
+		(rtf-env-document-par-stylesheets doc))
    :info (rtf-env-document-info doc)))
 
 (defun rtf-document-setup-char-styles (styles)
@@ -694,7 +693,7 @@ the fonttbl destination group.")
     (dotimes (i (length styles))
       (when (aref styles i)
 	(let ((face (rtf-character-props-face
-		     (rtf-env-stylesheet-charfmt (aref styles i)))))
+		     (rtf-stylesheet-formatting (aref styles i)))))
 	  (set-face-attribute face nil
 			      :inherit (rtf-resolve-char-prop-face-inheritance
 					(aref styles i) styles)))))
@@ -703,8 +702,8 @@ the fonttbl destination group.")
 (defun rtf-resolve-char-prop-face-inheritance (style styles-vect)
   (let ((list nil ;; (list rtf-default-face)
 	      )
-	(basedon (rtf-env-stylesheet-basedon style))
-	(charprops (rtf-env-stylesheet-charfmt style)))
+	(basedon (rtf-stylesheet-basedon style))
+	(charprops (rtf-stylesheet-formatting style)))
     (when (and basedon
 	       (aref styles-vect basedon))
       (push (rtf-character-props-face
@@ -715,7 +714,75 @@ the fonttbl destination group.")
     (when (rtf-character-props-italic charprops)
       (push 'italic list))
     list))
-					
+		
+(defun rtf-document-setup-styles (styles)
+  (let ((vect (make-vector (length styles) nil)))
+    (dotimes (i (length styles))
+      (when (aref styles i)
+	(aset vect i
+	      (rtf-resolve-style i styles))))
+    vect))
+
+(defun rtf-resolve-style (n styles-vect)
+  (let* ((this-style (aref styles-vect n))
+	 (style (make-rtf-stylesheet))
+	 (type (rtf-stylesheet-type this-style))
+	 (base-styles (list this-style))
+	 (face (if (eq type 'cs)
+		   ;; character style sheet
+		    (rtf-character-props-face
+		     (rtf-stylesheet-formatting this-style))
+		 ;; paragraph style sheet
+		 (rtf-character-props-face
+		  (rtf-paragraph-charfmt
+		   (rtf-stylesheet-formatting this-style)))))
+	 (face-inherit nil)
+	 (current (and (rtf-stylesheet-basedon this-style)
+		       (aref styles-vect
+			     (rtf-stylesheet-basedon this-style)))))
+    (while current
+      (push current base-styles)
+      (if (integerp (rtf-stylesheet-basedon current))
+	  (setq current (aref styles-vect 
+			      (rtf-stylesheet-basedon current)))
+	(setq current nil)))
+    ;; We go through the list of ancestors, "oldest" one first.
+    (dolist (bstyle base-styles)
+      (setq style (rtf-merge-struct style bstyle))
+      (if (eq type 'cs)
+	  (push (rtf-character-props-face
+		 (rtf-stylesheet-formatting bstyle))
+		face-inherit)
+	(push (rtf-character-props-face
+	       (rtf-paragraph-charfmt
+		(rtf-stylesheet-formatting bstyle)))
+	      face-inherit)))
+    (set-face-attribute face nil :inherit face-inherit)
+    style))
+
+(defun rtf-merge-struct (s1 s2)
+  (if (and s1 s2
+	   (/= (length s1) (length s2)))
+      (error "Trying to merge different structs.")
+    (cond ((null s1)
+	   (copy-sequence s2))
+	  ((null s2)
+	   (copy-sequence s1))
+	  (t (let ((vect (make-vector (length (or s1 s2)) nil)))
+	       (dotimes (i (length vect))
+		 (if (and (vectorp (aref s1 i))
+			  (vectorp (aref s2 i)))
+		     (aset vect i
+			   (rtf-merge-struct (aref s1 i)
+					     (aref s2 i)))
+		   (aset vect i
+			 (or (aref s2 i)
+			     (aref s1 i)))))
+		 vect)))))
+  
+
+
+			
 ;; Local Variables:
 ;; sentence-end-double-space: t
 ;; eval: (font-lock-add-keywords nil '(("(\\(define-rtf-\\(?:control\\|special\\|destination\\)\\)" (1 font-lock-keyword-face) ("\\s-+\\(.*?\\)\\>" nil nil (1 font-lock-function-name-face)))))

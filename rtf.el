@@ -37,7 +37,20 @@
 			   (get-text-property (match-beginning 0) 'rtf-characters))))))
 
 (defun rtf-resolve-faces (par chars)
-  (let ((styles-list (list (rtf-character-props-face chars))))
+  (let ((styles-list nil)
+	(par-style (and par
+			(rtf-paragraph-style par))))
+    (when par-style
+      (let ((parent
+	     (rtf-stylesheet-formatting
+	      (aref (rtf-document-par-styles rtf-document)
+		    par-style))))
+	(push (rtf-character-props-face
+	       (rtf-paragraph-charfmt parent))
+	      styles-list)))
+    (when (and chars
+	       (rtf-character-props-face chars))
+      (push (rtf-character-props-face chars) styles-list))
     (when (rtf-character-props-font chars)
       (push (rtf-character-props-font chars)
 	    styles-list))
