@@ -1,0 +1,150 @@
+<<<< RAW SKETCH >>>>
+
+ABSTRACT: Emacs should become a powerful word processor.  This
+document discusses the road map.  To do so, we first discuss what the
+terms “word processing” and “word processor” actually mean, by
+discussion various paradigms (or /idealtypen/) of text processing and
+thus determining the place of existing word processors in this
+field. Thereby we shift from a descriptive definition of “word
+processor” to a normative one. ... discussing problems of this within
+GNU Emacs ... describing future frame work for word processing in GNU
+Emacs
+
+NOTE: I use the term “text processing” or “text processing software”
+to refer to any kind of application and any kind of paradigm dealing
+with text intended to be read by human beings.  This ranges from
+text/plain over HTML and LaTeX to Desktop Publishing.
+
+
+* What is a word processor?
+
+The Wikipedia says: ....
+
+However that does not tell us much about the /differentia specifica/
+of word processing software, it does not tell us much about the
+properties of a word processor at all.  In fact I got the impression
+that the term “word processor” is rather defined by a set of
+particular programs and (the implicit similarities and pecularities
+of) their user interface than by a concise description of their
+scope.
+
+There is no sense in mindlessly copying the behaviour of an existing
+application or in implementing the “lowest common denominator” of the
+behaviour of a set of application.  Especially not, since I will argue
+below that those applications and usage modells have serious
+shortcomings.  Emacs should become a word processor, yes, but it
+should become a _better_ word processor.  Or to put it a little bit
+stronger: it should become the first word processor that does not
+suck.
+
+For this reason I am going to try to stab at the problem of “word
+processing” from to different directions: the mode of editing (or the
+“usage paradigm”, if you prefer that) and document sharing.
+
+
+Modes of Editing:
+
+    (1) “What you see is what you get” (WYSIWG)
+
+        The ... of the text on the screen matches the ... of the
+        printed output exactly (modulo resolution).
+
+        More precisely: What you see on the screen is a diagram
+        (C.S. Peirce) of the printed output with the important
+        properties constituting the semiotical relationship beeing:
+        position relative to the canvas and shape of the glyphs
+        (modulo resolution as before).
+
+
+    (2) “What you see is what you meant”
+
+    I seem to recall that I have read this phrase in the
+    documentation to Lyx.  Lyx and the similar application TeXmacs
+    are ...  The ... of the text on screen matches ...
+
+
+    (3) Editing source code which is then compiled to a target format.
+
+
+With the possible exception of (2), all three have in common that they
+regard the printed output as the “actual thing” or as the thing that
+matters.  They do not regard the text on screen as something important
+of its own.  The only raison d'etre of the editing medium is to
+produce the target output more or less conveniently.  From this point
+of view, (1) and (3) are not very different.  Their only (for the
+scope of this document neglectible) difference is the mode of editing.
+
+(2) is more interesting.  bla, bla ... 
+
+In a certain sense (2) and (3) are also quite similar. One may regard
+markup like \section{...} as a _visual_ ...  Syntax highlighting is
+in fact the very first step to go that road.  In fact, it would be
+possible to write a very sophisticated font-lock which hides the tags
+and renders 
+
+
+* Existing word processors as poor man's QuarkExpress
+
+- notorious for generating printed output which differs widely from
+  the on-screen stuff.
+
+- different appearance of the same document on different
+  applications/platforms
+
+
+Combining the worst of both worlds.
+
+
+There are two /idealtypen/ of text processing:
+
+      (1) Specify the appearance of the text on the output device.
+           I.e. specify the shape of the glyphs (the font), the
+           weight, slant of characters, their exact position on the
+           output device.
+
+      (2) Divide the text into syntactical units and specify their
+           properties.  For example, specify that a certain set of
+           characters is “a headline”, another one “paragraph text” or
+           “a quotation”, specify that a specific set of characters in
+           the headline is “emphasized” and so on.
+
+There is, as far as I know, no application that embodies either of
+this principles in a strict way.  But there are applications that put
+an emphasis on one or the other.  An example for one is any Desktop
+Publishing Software, like Quark Express, Adobe PageMaker, Adobe
+Indesign. [Note: is there any _free_ DTP software?] Example
+applications for (2) would be Texinfo or LaTeX.
+
+However, this is misleading.  Each DTP software that I know allows and
+encourages a heavy use of stylesheets (for example for paragraph
+types). The use of stylesheets is nothing less than a combination of
+(2) with an embedded specification of how such syntactical units are
+supposed to look like.  A LaTeX on the other hand does not only allow
+to specify specific fonts, weights, sizes, but in general a LaTeX
+document would look very similar on different platforms when it is
+compiled into a dvi or ps file, given a standard LaTeX distribution.
+
+Since document sharing is one of my main concerns (as described
+below), it might be better to talk about this in terms of file
+formats. Examples for (1) are Postscript, PDF and DVI.  An example
+for (2) would be HTML without CSS and the like, or in general SGML
+and XML.
+
+
+* Pitfalls
+
+Specifying the exact appearance is evil.  
+
+* “What you see is what you get” (WYSIWYG)
+
+Taken literally, the concept of WYSIWYG means: the 
+
+
+
+
+Local Variables: 
+mode: outline 
+coding: utf-8 
+sentence-end-double-space: t
+egoge-buffer-language: english 
+End:

@@ -1,0 +1,50 @@
+* Add lists.
+
+
+* Write a corresponding RTF-writer.
+
+
+* Implement the “change tracking” feature.
+
+
+* Add tables.
+
+
+* Add Footnotes and Endnotes
+
+
+* Add superscripts, subscripts and possibly some other character
+  properties as well.
+
+
+* Reduce the amount of consing.
+  See the file PROBLEMS for details.
+
+
+* Find a solution for the antagonism “writer defined layout” : “reader defined layout”
+
+
+* Add a real user interface (!).
+
+
+* Write an end user manual.
+
+
+* Determine the best way to hook the RTF package into ‘find-file’
+
+  For example via ‘format-alist’, consider implementing a minor mode.
+
+
+* Do some profiling and speed things up, if possible.
+
+
+* Implement something to produce dvi, ps and pdf files from an RTF buffer, using TeX (!)
+
+
+
+Local Variables: 
+mode: outline 
+coding: utf-8 
+sentence-end-double-space: t
+egoge-buffer-language: english 
+End:

@@ -1,0 +1,182 @@
+This package is still in a very early stage of development.  For this
+reason I list here not only problematical aspects/bugs in the already
+implemented code, but open (or questionable) design decisions as well.
+
+See also the file mission.txt for a general description of the word
+processing framework that I want to see in Emacs.
+
+* Consing and Garbage collection
+
+  It seems that the actual parsing of RTF is quite fast.  But
+  obviously it produces a lot of garbage.  Garbage collection may take
+  up to a minute or more on my system (1500 MHz, 256 MB RAM) -- I did
+  measure this.  Here are some spots were we could possibly reduce the
+  amount of garbage generation.
+
+**      The Tokeniser
+
+        The function ‘rtf-read-token’ is presumably the greatest
+        evildoer.  It concatenates each character to the previously
+        read characters, thus allocating a new string of varying
+        length for each single char in the document.  There may be
+        several strategies to deal with it.  Since ‘rtf-read-token’ is
+        a bottleneck, this is also a question of speed.  Maybe we
+        could leave this function intact, but simply change
+        ‘run-state-machine’ from state-m.el accordingly.  I should
+        consider this as a bug in state-m.el, anyways.  It might be
+        also worth checking whether state-m.el could be partly
+        implemented in C, adding a new ‘reading-automaton’ data type
+        to Emacs Lisp.  Another option is to check whether the
+        “Pragmatic Parsing” from 
+        <URL:  http://home.pipeline.com/~hbaker1/Prag-Parse.html> 
+        would be a good way to implement my tokeniser.
+
+**      Separation of Reading and Evaluation
+
+        Parsing is done in two steps: the RTF file is first read into
+        a big list of s-expressions; then this list is interpreted in
+        order to get the text with the proper formatting into a
+        buffer.  After that this big list becomes garbage.  I hesitate
+        to change this, because it is nice and clean and easy to
+        maintain.  However, from the top of my head I could think of
+        the following ways to deal with it:
+                If the garbage collector in Emacs would deal with
+        short living garbage in an optimised way (note to myself:
+        better check whether it actually is not), then this would be
+        less of a problem.  It should be a no-brainer, to make the
+        evaluator drive the reader and let them communicate via a
+        FIFO, so that the amount of data, that _needs_ to be in memory
+        at a given time could be drastically reduced.  It seems that
+        Dave Love started to work on the Boehm GC for Emacs,
+        which—from what I've heard—does what I want.  If I am lucky,
+        then this is already done and released, when this package
+        finally becomes ready for end-users. :-/
+                The least desirable solution would be to unify reading
+        and evaluation again.  The function ‘rtf-read-token’ could
+        delete control information in the RTF buffer after it has read
+        it, leaving only the unformatted text.  I'd need to make sure
+        that text inside a destination group is treated properly,
+        though.  The reader would add text properties to the same
+        buffer (like the functions provided by ‘format.el’), rather
+        than inserting strings into a new buffer.  However, I am not
+        sure whether I am willing to maintain the resulting code.
+
+
+* Formatting style sheets
+
+   Currently the reader resolves character style sheets and
+   inheritance of only through face inheritance.  This does not cope
+   with some character formatting properties like subscript or
+   superscript.  There might be similar issues with paragraph
+   formatting properties.  Possible solutions:
+
+**      Do it at all during fontification
+
+        Instead of just putting the face in the vector which is the
+        value of the ‘rtf-characters’ text property on the affected
+        characters, we could put an integer there, referring to the
+        position of a character style sheet in the according data
+        structure.  Font-lock would then have to resolve inheritance.
+
+**      Do it all after customisation
+
+        The whole point of style sheet inheritance is that changing a
+        parent style sheet affects immediately all other style sheets
+        and the affected text as well.  We could simply update every
+        style sheet after it was changed via the UI.  The
+        ‘rtf-characters’ property would still need to refer to its
+        immediate affecting style sheet, but font-lock would not need
+        to do more than a single look-up.
+
+
+* Paragraph Formatting Properties
+
+  WP includes assigning properties to paragraphs.  The problem is that
+  Emacs does not provide a frame-work for this.  Emacs does not
+  distinguish paragraphs by a certain property but by regexp-searching
+  the text in the buffer. Usually text separated by two newline
+  characters from the rest is considered to form a paragraph. That may
+  be fine for plain text, but a) WP documents do not typically
+  separate lines with newline characters (thank goodness!) and b)
+  whitespace layout with tabs, spaces and newlines is very, very, very
+  bad practise in a WP context.  So where to store paragraph
+  information, including character style properties attributed to a
+  paragraph?  (I have experimented with putting paragraph properties
+  on the final (hard) newline of a paragraph, but that's messy.)
+
+  The only real solution is to enhance Emacs (and especially
+  redisplay) with a special feature. See the file
+  feature-request.html in the directory rfe.  But for the time being
+  we need a workaround.
+
+**      Distinguishing Paragraphs by text properties
+
+        The rtf package currently distinguishes paragraphs by text
+        properties.  Re-filling does not find the end of a paragraph
+        by searching for a double newline, it searches for the end of
+        the range of characters which have the same (‘eq’) value in
+        the ‘rtf-paragraph’ text property.  If necessary it adds
+        newlines before and after the paragraph.
+                This is uncommon behaviour in Emacs, but the big
+        benefit UI-wise is that the user gets visual feedback on how
+        the rtf-package (especially the writer) treats the paragraph
+        as soon as she hits ‘M-q’.  Otherwise she might be tempted to
+        do the whitespace layout by hitting RET and SPC, as if the
+        document were plain text.  In other WPs this is just bad
+        practise, but in Emacs it would simply wreak havoc with the
+        RTF produced by the writer.
+
+**  Providing a text/plain like UI
+
+        However, some users still might want an RTF buffer to behave
+        like a buffer in enriched-mode.
+
+        [FIXME: discuss problems and strategies.]
+
+
+* API and UI issues
+
+  Word Processing in Emacs is an yet unexplored area.  Existing
+  conventions (regarding API as well as UI) are not necessarily suited
+  for word processing and need to be [FIXME: english phrase for “im
+  Einzelfall überprüft”].
+
+**      Hooking the RTF into ‘find-file’
+
+        The framework provided by ‘format.el’ requires the reading
+        code to delete the markup from a buffer and return this same
+        buffer properly formatted and with the right text properties
+        on the buffer text.  This is tedious for a complicated and
+        cluttered format like RTF.
+                RTF files should be interpreted and rendered when a
+        user wants to visit them.  But it should be easy to turn this
+        off.  When there are more file formats than just RTF, it would
+        probably a good idea to implement a minor mode
+        (‘auto-render-file-mode’, a là ‘auto-image-file-mode’).  When
+        turned on, it would query a variable containing a list of
+        known file formats which a users wants to edit in their
+        rendered form.  So if, say, XHTML is supported in the future,
+        a user could remove XHTML from this list, if she wants to edit
+        the source rather than the rendered content -- or turn off
+        automatical rendering entirely.
+
+
+* RTF and enriched-mode?
+
+  [Discuss adding the reader/writer to the current enriched-mode
+  vs. providing separate modes; one for text/enriched as file format,
+  the other for RTF.]
+
+
+* Dealing with Bad RTF
+
+  [“bad RTF” means: RTF resulting from bad practise, especially RTF
+  not using stylesheets.]
+
+
+Local Variables: 
+mode: outline 
+coding: utf-8 
+sentence-end-double-space: t
+egoge-buffer-language: english 
+End:

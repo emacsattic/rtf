@@ -1,0 +1,56 @@
+This is the README file for the RTF package, an RTF reader/writer for
+GNU Emacs.
+
+This package is incomplete and in a very early stage of
+development. DO NOT USE IT!
+
+				 ***
+
+If you are curious, you have to byte compile and load the files
+rtf.el, rtf-par.el, rtf-reader.el and rtf-controls.el manually.  Byte
+compilation is strongly recommended.  If ‘load-path’ is set correctly,
+it is sufficient to ‘(require 'rtf)’.
+
+At compile time you also need the library state-m.el in the “lib”
+directory. (It is written by me, but it is in “lib”, because it is a
+separate package, which has nothing to do with RTF directly.)
+
+				 ***
+
+There is no real user interface, so far.  For testing I use the
+following two functions:
+
+‘rtf-test-read’ prompts for an RTF file and reads it into the
+variable ‘rtf-test-var’. This is useful for examining the output of
+the reader, for example in M-x ielm.
+
+Please note, that reading currently produces *A LOT* of garbage.
+Garbage collection may take up to a minute and more on my system (1500
+MHz, 256 MB RAM).  So do not be surprised.  I am going to postpone
+fixing this until a very late stage of development.
+
+‘rtf-test-eval’ creates a new buffer named “*tmp*”, sets it to
+‘rtf-major-mode’, evaluates the value of ‘rtf-test-var’ thereby
+inserting text into “*tmp*”.
+
+The directory “samples” contains a collection of RTF files which I am
+using for testing.
+
+				 ***
+
+rtf.el             the code for a mode for editing rendered RTF documents
+
+rtf-par.el         code for paragraph formatting (filling)
+
+rtf-reader.el      the heart of the RTF reader
+
+rtf-controls.el    code implementing RTF control words and symbols,
+                   required by rtf-reader.el
+
+
+Local Variables: 
+mode: outline 
+coding: utf-8 
+sentence-end-double-space: t
+egoge-buffer-language: english 
+End:
