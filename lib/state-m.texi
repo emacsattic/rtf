@@ -1,0 +1,484 @@
+@node State Machines
+@section Writing simple reader functions
+@cindex state machines
+
+A state machine is a model to describe complex control structures.  A
+state machine is always in a certain state, it receives some input,
+possibly generates some output, then it switches to another state,
+where it repeats.
+
+State machines are useful in a wide range of computing tasks.  In fact
+a computer itself is only a very complex state machine.  One area,
+however, where they are frequently used, is for reading and parsing
+textual input.  Emacs provides the macro @code{run-state-machine} to
+construct state machines for the purpose of reading text from a
+buffer.
+
+@menu
+* State Machine Basics::     A short introduction to state machines.
+* Example State Machine::    A basic example.
+* Defining State Machines::  Defining state machines for reader 
+                             functions.
+* Character Based Reading::  Switching states based on the character
+                             after point.
+* Regexp Based Reading::     Switching states based on the buffer text
+                             after point.
+* State Machine Notes::      Caveats and notes on performance.
+@end menu
+
+@node State Machine Basics
+@subsection State Machines -- an Introduction
+
+A traffic light may serve as a very basic example of a state
+machine.  It has four states: a red state, a green state and two yellow
+states.  There is one single input event, the signal ``Change the
+colour now!''.  As ``output'' it turns certain electric bulbs on or
+off.
+
+@example
+@group
+             +-------+
+    ,--------|  red  |<-------.
+    |        +-------+        |
+    |                         |
+    |                         |
+    v                         |
++-------+                 +-------+
+|yellow1|                 |yellow2|
++-------+                 +-------+
+    |                         ^
+    |                         |
+    |        +-------+        |
+    `------->| green |--------´
+             +-------+
+@end group
+@end example
+
+When a state machine receives input, it decides which state should be
+the next state.  In a traffic light this decision is very simple,
+because in each state there is only one type of input event and one
+transition to another state possible: when the traffic light is in the
+state ``red'' and it receives valid input, it switches to the state
+``yellow1'' unconditionally.  A more complex state machine would allow
+more types of input events and would depend the decision about the
+next state not only on the current state, but also on the
+@emph{specific} input event.  A state machine that is made to read
+textual input would typically depend the switching to the next state
+on the actual character it received.
+
+The way we describe the traffic light above, we assume that it was
+always running and that it will run forever.  This is, of course, also
+not true for a reader.  Most state machines would define one state as a
+starting state and one or more states as final ones; so that the state
+machine terminates after switching to a state declared to be a final
+one.
+
+@node Example State Machine
+@subsection A Basic Example of a State Machine
+
+The macro @code{run-state-machine} provides an easy way to define and
+run state machines in Emacs Lisp for the purpose of reading input from
+a buffer.  Here is a basic usage example as an introduction.
+
+Suppose we need a function that parses the content of a buffer for
+strings.  Each time we call this function, it should scan the buffer
+for a quotation mark and return the buffer content up to the next
+quotation mark, thereby moving point forward.  We could use this
+function to get every string from the buffer if we call it often
+enough.  Here is how it could be done with @code{run-state-machine}:
+
+@lisp
+@group
+(defun read-next-string ()
+  (run-state-machine ()
+    (look-for-string (?\" nil t read-string)
+		     (t   nil t look-for-string))
+    (read-string (?\" nil t exit)
+		 (t   t   t read-string))))
+@end group
+@end lisp
+
+This state machine has only two states, @code{look-for-string} and
+@code{read-string}.  In each state the machine looks at the character
+after point and decides whether it should stay in the same state or
+switch to another one.  In both cases, however, it moves point forward
+by one character.  The possible transitions to other states are
+defined as lists after the name of the state.  Here each state has two
+of them.
+
+The starting state is @code{look-for-string}, because it is the first
+one listed.  When the machine is in the state @code{look-for-string},
+it checks wether the character after point is a @samp{"}.  This is
+indicated by the @code{?\"} at the beginning of the first transition.
+If it is, it switches to the state @code{read-string}.  If the
+character after point is anything else but a @samp{"} (indicated by
+the symbol @code{t} at the beginning of the second transition), the
+machine stays in the state @code{look-for-string}.
+
+When the state machine is in the state @code{read-string} it checks
+again wether the character after point is a @samp{"}.  But this time
+it terminates if it is.  This is specified by the special state name
+@code{exit}.  In all other cases the string it currently reads is not
+finished, so the machine stays it in the the state @code{read-string}.
+
+On each transition to another state the state machine may store the
+character after point internally.  The concatentation of all stored
+characters is the return value of @code{run-state-machine}.  The
+second element in the definition of a transition specifies if the
+character after point should be appended to the return value in this
+way or not.  In our example it is t only in the second transition of
+@code{read-string}, because we want to return only characters between
+two @samp{"}.  The third element indicates if the state machine should
+move point forward in the buffer; here it is @code{t} in all
+transitions.
+
+This is a diagram of the states and transitions:
+@example
+@group
+                          Start
+                            |
+                            |
+                            |
+                            v
+                    +-------------------+
+                    |look-for-string    |<---.  Character is not a
+                    +-------------------+    |  quotation mark.
+                            |     |          |  * Do not store it.
+      Character is a        |     `----------´  * Move point forward.
+      quotation mark.       |
+      * Do not store it.    |
+      * Move point forward. |
+                            v
+                    +-------------------+
+                    |read-string        |<---.  Character is not a
+                    +-------------+-----+    |  quotation mark.
+                            |     |          |  * Store it.
+      Character is a        |     `----------´  * Move point forward.
+      quotation mark.       |
+      * Do not store it.    |
+      * Move point forward. |
+                            v
+                          Exit
+@end group
+@end example
+
+@node Defining State Machines
+@subsection Defining State Machines
+@cindex writing a reader
+
+The macro @code{run-state-machine} provides a mini-language to define
+state machines for reader-functions.  To define a state machine, you
+basically list a bunch of states and specify what the machine should
+do in the different states by listing and defining the transitions
+from each state to following ones.  This is explained in more detail
+in @ref{Character Based Reading} and @ref{Regexp Based Reading}.
+
+@deffn Macro run-state-machine spec &rest states
+This macro defines and executes a state machine.
+
+On each transition from one state to the next one the state machine
+may accumulate characters or strings from the current buffer.  When
+the machine terminates, it returns these per default as a concatenated
+string; it returns @code{nil}, when no characters or strings were
+accumulated.
+
+The first argument @var{spec}, if non-@code{nil}, is a list of the
+form
+
+@example
+(@var{result-variable} @var{end-of-buffer-expression}).
+@end example
+
+@var{result-variable} should be a symbol or @code{nil}.  The symbol is
+used as the name of the variable that the state machine uses to store
+its return value at run time.  Specify a symbol, if you want to access
+this variable.  If you are not interested in what variable name the
+state machine uses internally, specify @code{nil}.  In this case the
+state machine still returns the accumulated characters or strings, but
+it deals with them transparently.  Please note, that specifying a
+symbol might not be necessary in many cases, because you can also
+control the return value to a large extend by specifying a function as
+@var{add-to-result} in the definition of a transition (see below).
+
+When a state machine encounters the end of the buffer at run time, it
+terminates and returns @code{nil} by default.  To change the
+return-value, you can specify a Lisp expression as
+@var{end-of-buffer-expression} that is executed in this case; the
+return value of this expression becomes the return value of the state
+machine.  To return the accumulated result in whatever state it may be
+at that time, simply set @var{result-variable} to some symbol and
+repeat that symbol as @var{end-of-buffer-expression}.  For example,
+@code{(output output)} as @var{spec} leads to a state machine that
+uses the variable @var{output} to store the result and returns the
+value of @var{output} unmodified, when it terminates at the end of the
+buffer.
+
+@var{spec} may be @code{nil}.  This is equivalent to @code{(nil nil)}.
+@var{spec} is followed by a number of one or more definitions of
+states.
+
+The definition of a state consists of the name of the state followed
+by one or more definitions of transitions to following states.  The
+starting state is always the first one listed.  Specifying the state
+name @code{exit} as the following state in a transition means to
+terminate processing; you can't define a state named @code{exit}.
+
+A transition is a list of the form
+
+@example
+(@var{matcher} @var{add-to-result} @var{advance} @var{next-state})
+@end example
+
+@var{matcher} may be either a regular expression (@pxref{Regexp Based Reading}).
+Or a single character (@pxref{Character Type}), a cons cell
+of two characters indicating a range of characters or a list of
+characters or character ranges indicating character
+alternatives. @xref{Character Based Reading}.
+
+If @var{add-to-result} is @code{t}, the character after point is
+appended to the return-value (which--in the normal case--is a string).
+If @var{advance} is @code{t}, the machine moves point forward by one
+character.  Then it switches to the state specified by
+@var{next-state}.  If @var{matcher} is a regular expression,
+@var{add-to-result} and @var{advance} may be integers.  In this case
+the integer specifies the subexpression of @var{matcher} which should
+be added to the result or to whose end point should move,
+respectively. @xref{Regexp Based Reading}.
+
+@var{add-to-result} may be a function.  In this case the function
+should take two arguments.  The first one being the current
+return-value and the second one being the pending input-character (as
+a string!).  The return value of the state machine is then set to the
+value returned by this function.  If @var{advance} is a function, it
+receives no argument.  This function takes the full resposibility for
+moving point.  For example a transition
+@code{(?a t t another-state)}
+could be written equivalently (modulo performance) as
+@code{(?a concat forward-char another-state)}.
+@end deffn
+
+@node Character Based Reading
+@subsection Switching States Based on the Character after Point
+
+In character-based reading, a state machine specified with
+@code{run-state-machine} switches states based on the character after
+point.
+
+In the simple case @var{matcher} is either a character or the symbol
+@code{t}.  To find the right transition, the state machine looks for a
+transition whose @var{matcher} is @code{eq} to the character after
+point.  If it finds none, it looks for a transition whose @var{matcher}
+is @code{t}.
+
+For example, a state could look like this:
+
+@example
+@group
+;;           MATCHER ADD-TO-RESULT ADVANCE NEXT-STATE
+(look-for-a (?a      t             t       another-state-1)
+            (t       nil           nil     another-state-2))
+@end group
+@end example
+
+When the state machine is in the state @code{look-for-a}, it checks if
+the character after point is an @samp{a}.  If it is, it adds an
+@samp{a} to the return value, moves point forward and switches to the
+state @code{another-state-1}.  Else, it does not add anything to the
+return value, leaves point where it is and switches to the state
+@code{another-state-2}.
+
+You can specify alternative characters or a range of characters as
+@var{matcher} in a transition.  To specify a range of characters,
+define a cons cell of the first and the last character.  @code{(?a
+. ?z)} as @var{matcher} matches all characters from @samp{a} up to
+@samp{z}.  To specify alternative matches, use a list of characters or
+of character ranges.  For example @code{(?a ?b ?c)} as @var{matcher}
+matches the characters @samp{a}, @samp{b} or @samp{c}, while
+@code{((?0 . ?9) ?-)} matches digits and hyphens.
+
+As an extended example, here is the definition of a reader-function
+@code{example-reader} that returns everything inside @samp{"} as a
+string, digits as integers and everything else as a symbol.  Each time
+the function is called it reads the next object from the current
+buffer and returns it according to its type.  If it encounters the end
+of the buffer, it raises an error.
+
+@smalllisp
+@group
+(defun exmpl-make-number (output ignore)
+  (string-to-number output))
+@end group
+
+@group
+(defun exmpl-make-symbol (output ignore)
+  (make-symbol output))
+@end group
+
+@group
+(defun example-reader ()
+  (run-state-machine (nil (error "End of buffer"))
+    ;; @r{Starting state.}
+    (start (?\" nil t read-string)
+           ((?0 . ?9) t t read-integer)
+           ((?\n ?\t ?\ ) nil t skip-white-space)
+           (t t t read-symbol))
+    ;; @r{Skip white-space}
+    (skip-white-space ((?\t ?\n ?\ ) nil t skip-white-space)
+                      (t nil nil start))
+    ;; @r{Read a string: add everything to the return value up to the}
+    ;; @r{next `"'.  Then exit.}
+    (read-string (?\" nil t exit)
+                 (t t t read-string))
+    ;; @r{Read an integer: add every digit to the return value.  Every}
+    ;; @r{other character causes the machine to exit.  Convert the}
+    ;; @r{return-value to an integer upon exit.}
+    (read-integer ((?0 . ?9) t t read-integer)
+                  (t exmpl-make-number nil exit))
+    ;; @r{Read a symbol: read everything which is not a digit, a `"' or a}
+    ;; @r{white-space character.  Return a symbol.}
+    (read-symbol ((?\" ?\  ?\t ?\n (?0 . ?9))
+                  exmpl-make-symbol nil exit)
+                 (t t t read-symbol))))
+@end group
+@end smalllisp
+
+@node Regexp Based Reading
+@subsection Switching States Based on the Buffer Text after Point
+
+Instead of a character (or a list of character-alternatives) or the
+symbol @code{t}, @var{matcher} may be a regular expression.
+@xref{Regular Expressions}.  In this case the state machine checks for
+a matching transition by applying the regexp with @code{looking-at} to
+the text after point.
+
+When @var{matcher} is a regexp @var{add-to-result} and @var{advance}
+may be integers.  An integer as @var{add-to-result} specifies the
+subexpression which is added to the return-value.  An integer as
+@var{advance} specifies to the end of which subexpression point should
+move.  In both cases @code{t} is interpreted as @code{0}.
+
+As an example, suppose we have a silly database file in which we store
+information about persons, animals and text editors.  Now we want to
+extract the names of persons by consecutive calls to a function
+@code{read-person-name}; i. e. the function should skip the records
+for animals and text editors as well as records for persons where the
+name field is omitted.  The entries could look like this:
+
+@example
+@group
+Type Animal
+Name Frog
+Colour Green
+@end group
+
+@group
+Type Person
+# name unknown
+Colour Red # colour of hair
+Number 12345 # postal code
+@end group
+
+@group
+Type Text-Editor
+# The One True Editor
+Name Emacs
+Number 21.4 # version
+@end group
+
+@group
+Type Person
+Name Tars Tarkas # This is the name we want.
+Colour Green
+@end group
+
+@end example
+
+To simplify things, we assume that the entry for each field is on a
+line of it's own, so we can do the parsing line-wise.  Fields may
+occur in abitrary order, except for the @samp{type} field, which must
+be the first field in the record.  Each record starts with a
+declaration of the @samp{type}; @samp{#}s are comment-characters;
+empty lines and leading whitespace are legal, but not significant;
+case is also insignificant.
+
+@lisp
+@group
+(defun read-person-name ()
+  "Read the next name in the category \"Person\"."
+  (let ((case-fold-search t)) ; ignore case
+    (run-state-machine ()
+      (look-for-person
+       ("\\s-*type\\s-+person" nil forward-line get-name) ; @r{person found}
+       (t nil forward-line look-for-person)) ; @r{keep on searching}
+      (get-name
+       ("\\s-*type" nil nil look-for-person) ; @r{no name was provided}
+       ("\\s-*name\\s-+\\(.*?\\)\\s-*#.*$" 1 forward-line exit) ; @r{name found}
+       (t nil forward-line get-name))))) ; @r{keep on searching}
+@end group
+@end lisp
+
+This function parses the text line by line, because @var{advance} is
+either @code{nil} or the function @code{forward-line}; one effect of
+this is that all the regular expressions match from the beginning of
+the line.  When it is in the state @code{look-for-person} the function
+moves forward in the buffer until it finds a record that starts with
+@samp{type person}.  Then it switches to the state @code{get-name}.
+Again it moves point forward line by line until it finds a @samp{name}
+field.  When it finds one, the state machine terminates and returns
+the name; this happens in the second transition of @code{get-name}:
+the regexp is constructed in such a way that characters after
+@samp{name} and before any @samp{#} match the first subexpression,
+which is added to the return value, because @var{add-to-result} is
+@code{1} in this transition.
+
+But when the state machine encounters another @samp{type} field
+indicating a new record before it finds a name, it switches back to
+the state @code{look-for-person}.  This is specified in the first
+transition of @code{get-name}. (@var{advance} is @code{nil} here,
+because @samp{type} could be @samp{person} again.  Then the state
+@code{look-for-person} should switch back to @code{get-name}
+immediately.) So if point is at the beginning of the first record in
+the example (@samp{Type Animal}), the first call to
+@code{read-person-name} will return @samp{"Tars Tarkas"}, although
+there is another person in between.  But this other record provides no
+name and is therefore ignored.
+
+@node State Machine Notes
+@subsection Caveats and Notes on Performance
+
+@enumerate
+
+@item
+Although it is possible to apply both transitions with regular
+expressions and with characters as @var{matcher} in one and the same
+state machine, this might add some undesirable additional overhead,
+especially if the majority of transitions has characters as
+@var{matcher}.  In this case it might be worth the extra effort to get
+rid of regexp entirely for the sake of performance.  This is due to
+the internal handling of the transitions.  As far as this note is
+concerned, character alternatives and character ranges count as
+@var{matcher} of the type ``character''.
+
+@item
+The checking for transitions with regexps as @var{matcher}, characters
+as @var{matcher} and the default transitions is done independently and
+in this order: regexps first, defaults last.
+
+@item
+The order of transitions in the definition of a state is significant.
+If any two transitions whose @var{matcher} is of the same type would
+match in the current current buffer, the state machine chooses the
+transition that comes first in the state-definition.  For example if
+one transition has @code{?y} as @var{matcher} and another transition
+has @code{(?a . ?z)} as @var{matcher} and the character after point is
+a @samp{y}, then the transition that comes first in the definition of
+the state is chosen.  @emph{But}: regexps as @var{matcher} come always
+before characters as @var{matcher} and defaults come always last,
+regardless of where they were defined.
+
+@item
+The macro @code{run-state-machine} does quite some computation on each
+expansion.  Therefore it is strongly recommended to byte-compile a
+package that uses it.
+
+@end enumerate
